@@ -1,8 +1,22 @@
 # Uua — 작업 HANDOFF
 
-> 이 파일은 IntelliJ에서 이 프로젝트를 열고 Claude(Claude Code)를 켰을 때 **가장 먼저 읽는 파일**입니다.
+> 이 프로젝트에서 Claude(Claude Code)를 켰을 때 **가장 먼저 읽는 파일**입니다. (작업은 IntelliJ가 아니라 Claude Code에서 진행 중)
 > 전체 설계는 `docs/DESIGN.md` (Status: APPROVED). 이 핸드오프는 "지금 어디까지 됐고 다음에 뭘 하나"를 담습니다.
-> 최종 갱신: 2026-05-26
+> 최종 갱신: 2026-05-26 (밤, 작업 종료)
+
+---
+
+## ⏭️ 내일 여기서 시작 (2026-05-27)
+
+**개발규칙·PRD·비용조사·git분리·단계① 로컬검증까지 다 끝남.** 내일은 **코딩 단계**부터.
+다음 둘 중 하나를 고르면 됨 (사용자에게 물어볼 것):
+
+1. **단계 ① 마무리 = 공개 배포** — Render(앱) + Neon(DB) 무료 배포 + `/actuator/health` 공개 200.
+   계정 로그인은 사용자가 `!` 명령으로 직접. JVM `-Xmx` 튜닝(512MB OOM 방지) 검증 포함. 배포 과정 Notion 기록.
+2. **단계 ② = 쓰기 API** — `MemoryItem` 엔티티 + `EmbeddingClient`(Gemini `gemini-embedding-001`) + `POST /api/memories`
+   + 입력검증 + 임베딩 실패경로(503, 원자성). 배포는 나중에.
+
+→ 어느 쪽이든 **작업 결과를 Notion "Uua 프로젝트" 하위에 문서화**하며 진행 (개발규칙·PRD는 이미 작성됨, 아래 6번 링크).
 
 ---
 
@@ -72,7 +86,7 @@
 `docs/DESIGN.md`에 다 있지만, 막히기 쉬운 핵심만:
 
 - **벡터검색은 JPA 파생쿼리로 불가.** `@Query(nativeQuery=true)` 또는 `JdbcTemplate`로 `ORDER BY embedding <=> :q LIMIT :k`. 임베딩 컬럼(`vector(768)`)은 커스텀 타입 매핑 또는 네이티브로 read/write. → **이게 1순위 landmine.**
-- **임베딩 모델/차원 고정**: Gemini `text-embedding-004`, **768차원** → DB 컬럼 `vector(768)`. 차원 틀리면 스키마 마이그레이션.
+- **임베딩 모델/차원 고정**: Gemini **`gemini-embedding-001`**(설계의 `text-embedding-004` 대체), **768차원**(`output_dimensionality=768`) → DB 컬럼 `vector(768)`. 차원 틀리면 스키마 마이그레이션.
 - **무료티어 RPM**: 내 ingest가 청크 수십 개를 한 번에 임베딩하면 *내가 먼저* 한도 초과 → ingest는 순차+딜레이 또는 batch embed로 스로틀.
 - **임베딩 실패 시**: 503 반환 + 행 저장 안 함(쓰기 원자성). v1엔 재시도 큐 없음.
 - **v1 범위 고정**: LLM 요약 없음(임베딩 API 하나만 의존), "대시보드"는 `GET /api/usage/summary` JSON으로, MCP는 기존 `/api/context` 감싸는 얇은 stdio 래퍼(마지막 단계).
@@ -104,6 +118,9 @@
 
 ## 6. 참고 경로
 
+- **Notion "Uua 프로젝트"**: https://www.notion.so/Uua-36cff921786f8044bd84fa7acbda90b0 (모든 산출물 여기 하위에 문서화)
+  - 📕 개발 규칙: https://www.notion.so/36cff921786f81769626d5ce6b81325e
+  - 🔧 PRD — Uua v1: https://www.notion.so/36cff921786f81799164c0973d82af8e
 - 승인 설계(SSOT, 레포 내): `docs/DESIGN.md`
 - 원본 설계(gstack): `C:\Users\user\.gstack\projects\jobfit\user-main-design-20260526-131849.md`
 - 사용자 전역 메모리: `C:\Users\user\.claude\projects\C--Users-user\memory\ai-jobfit-project.md` (프로젝트 이력)
