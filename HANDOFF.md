@@ -27,27 +27,30 @@
   - **Gradle · Java 21 · Spring Boot 3.5.14**
   - group `com.uua`, 메인클래스 `src/main/java/com/uua/UuaApplication.java`
   - 의존성: web, actuator, data-jpa, validation, postgresql(driver), lombok, **docker-compose support**
-- ✅ `compose.yaml` 존재 — **단, 기본 `postgres:latest`라 pgvector 아님 + 호스트 포트 랜덤** (아래 1단계에서 교체할 것).
 - ✅ 승인 설계문서를 `docs/DESIGN.md`로 복사해 둠.
-
-git: 아직 init 안 됨(필요 시 `git init`). 첫 커밋은 작업자 판단.
+- ✅ **(2026-05-26) git 분리 완료**: Uua 폴더를 독립 저장소로 `git init`(브랜치 `main`).
+  이전엔 홈 디렉터리(`C:/Users/user`)에 git이 잘못 잡혀 있었음(README 1개짜리 빈 껍데기, 그대로 둠).
+- ✅ **(2026-05-26) 단계 ① 로컬 검증 완료** (커밋 `b47fb4f`):
+  - `compose.yaml` → `pgvector/pgvector:pg16`, 호스트 포트 `5432:5432` 고정.
+  - `build.gradle` → `flyway-core` + `flyway-database-postgresql` 추가.
+  - `application.properties` → datasource(로컬은 docker-compose 자동연결, 배포는 `SPRING_DATASOURCE_*` env 폴백),
+    `ddl-auto=validate`, flyway 활성화, actuator health 노출.
+  - `src/main/resources/db/migration/V1__init.sql` → `CREATE EXTENSION vector` + `memory_item` 테이블(`vector(768)`).
+  - 검증됨: `./gradlew bootRun` → pgvector 컨테이너 자동기동 → Flyway v1 적용 →
+    `/actuator/health` 200 → DB에 `vector` 확장 + `memory_item` 테이블 확인.
 
 ---
 
-## 2. 다음 할 일 — 단계 ① 완성 (뼈대 부팅 + pgvector + 공개 배포)
+## 2. 다음 할 일 — 단계 ① 마무리(공개 배포) → 단계 ②
 
-설계 로드맵의 1단계. 순서대로:
+**단계 ①에서 남은 것: 공개 배포 1개.**
 
-1. **compose.yaml을 pgvector로 교체** (현재 plain postgres):
-   - image를 `pgvector/pgvector:pg16` 으로 변경.
-   - 호스트 포트 고정: `ports: - '5432:5432'` (현재 컨테이너 포트만 있어 랜덤 매핑됨).
-   - `db/init/01-extension.sql` 같은 init 스크립트로 `CREATE EXTENSION IF NOT EXISTS vector;` 를 마운트하거나, 마이그레이션(Flyway)에서 실행.
-2. **application.properties** 정리: datasource(compose.yaml의 user/pw/db와 일치), `spring.jpa.hibernate.ddl-auto=validate`(스키마는 Flyway로), 로깅 등. *Spring Boot docker-compose support가 부팅 시 compose를 자동 기동*하므로 Docker Desktop이 켜져 있어야 함.
-3. **Flyway 도입**(설계 권고: 2단계 아니라 지금부터): `spring-boot-starter` 외 `flyway-core` + `flyway-database-postgresql` 추가. `V1__init.sql`에 extension + 첫 테이블.
-4. **/health 확인**: actuator라 `GET /actuator/health` 가 기본. `./gradlew bootRun` 후 200 확인. (설계의 "/health"는 actuator 헬스로 충족.)
-5. **공개 배포 먼저**(설계의 deploy-first 원칙): 빈 앱을 Railway/Render에 올려 공개 URL에서 health 200. **단, 무료티어가 pgvector 확장을 지원하는지 배포 전 확인**(Render 무료 Postgres는 90일 만료, 무료 웹서비스 슬립).
+- **공개 배포**(설계의 deploy-first 원칙): 앱을 Railway/Render에 올려 공개 URL에서 `/actuator/health` 200.
+  - ⚠️ **배포 전 확인**: 무료티어가 pgvector 확장을 지원하는지. (Render 무료 Postgres는 90일 만료 + 무료 웹서비스 슬립; Railway는 크레딧 소진형.)
+  - 배포 시 `SPRING_DATASOURCE_URL/_USERNAME/_PASSWORD` env로 prod DB 연결(코드는 이미 env 폴백 준비됨).
+  - prod DB에서 `CREATE EXTENSION vector` 권한 필요 — 관리형 Postgres가 vector를 제공/허용하는지 사전 확인이 핵심 함정.
 
-검증 기준: 로컬 `./gradlew bootRun`으로 부팅 + pgvector 컨테이너 자동 기동 + `/actuator/health` 200 + 공개 URL 200.
+그 다음 **단계 ②**: `MemoryItem` 엔티티(@Entity, embedding은 JdbcTemplate/네이티브로 read/write) + `EmbeddingClient`(Gemini text-embedding-004) + 쓰기 API + 입력검증·임베딩 실패경로(503).
 
 ---
 
