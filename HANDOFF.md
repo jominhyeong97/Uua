@@ -43,14 +43,27 @@
 
 ## 2. 다음 할 일 — 단계 ① 마무리(공개 배포) → 단계 ②
 
-**단계 ①에서 남은 것: 공개 배포 1개.**
+**단계 ①에서 남은 것: 공개 배포 1개.** (비용 조사 완료 — 아래 무료 스택 확정)
 
-- **공개 배포**(설계의 deploy-first 원칙): 앱을 Railway/Render에 올려 공개 URL에서 `/actuator/health` 200.
-  - ⚠️ **배포 전 확인**: 무료티어가 pgvector 확장을 지원하는지. (Render 무료 Postgres는 90일 만료 + 무료 웹서비스 슬립; Railway는 크레딧 소진형.)
-  - 배포 시 `SPRING_DATASOURCE_URL/_USERNAME/_PASSWORD` env로 prod DB 연결(코드는 이미 env 폴백 준비됨).
-  - prod DB에서 `CREATE EXTENSION vector` 권한 필요 — 관리형 Postgres가 vector를 제공/허용하는지 사전 확인이 핵심 함정.
+### 무료 스택 (2026-05-26 공식 페이지 조사, "비용 0" 성공기준 ⓑ 근거)
 
-그 다음 **단계 ②**: `MemoryItem` 엔티티(@Entity, embedding은 JdbcTemplate/네이티브로 read/write) + `EmbeddingClient`(Gemini text-embedding-004) + 쓰기 API + 입력검증·임베딩 실패경로(503).
+| 구성 | 선택 | 비고 / 함정 |
+|---|---|---|
+| 컴퓨트(앱) | **Render 무료 웹서비스** | $0, 15분 유휴 슬립(콜드스타트 ~1분), 750h/월. ⚠️**RAM 512MB → JVM `-Xmx` 튜닝 필수(OOM 위험)** |
+| DB | **Neon 무료** | pgvector 지원 ✓, 0.5GB, **만료 없음**, scale-to-zero(~350ms). **Render Postgres는 30일 만료라 쓰지 말 것** |
+| 임베딩 | **Gemini `gemini-embedding-001`** | 무료티어 요금 0. ⚠️무료티어 입력은 구글 학습에 사용됨(프라이버시) + RPM/RPD 한도 → ingest 스로틀 |
+| MCP | 로컬 stdio | 비용 0 |
+
+- 배포 시 `SPRING_DATASOURCE_URL/_USERNAME/_PASSWORD` env로 Neon 연결(코드는 이미 env 폴백 준비됨).
+- Neon에서 `CREATE EXTENSION vector` 가능(무료 플랜 확장 라이브러리 포함). Flyway V1이 그대로 실행됨.
+- ⚠️ **임베딩 모델명 변경**: 설계 SSOT의 `text-embedding-004`는 `gemini-embedding-001`로 대체됨. 새 모델도 **무료 + 768차원 지원**(`output_dimensionality=768`)이라 `vector(768)` 스키마는 그대로 OK. 단계 ②에서 이 모델명으로 구현.
+
+그 다음 **단계 ②**: `MemoryItem` 엔티티(@Entity, embedding은 JdbcTemplate/네이티브로 read/write) + `EmbeddingClient`(Gemini `gemini-embedding-001`) + 쓰기 API + 입력검증·임베딩 실패경로(503).
+
+### 📒 문서화 규칙 (2026-05-26부터)
+- **개발 순서: 개발규칙 + PRD를 먼저 작성 → 그 다음 코딩.**
+- 모든 산출물(개발규칙·PRD·yml 설정 등)은 **Notion "Uua 프로젝트" 페이지** 하위에 문서화하며 진행(나중에 보고 공부용, orbit/LUVUM 프로젝트 스타일).
+  - Notion 페이지: https://www.notion.so/Uua-36cff921786f8044bd84fa7acbda90b0
 
 ---
 
