@@ -1,0 +1,11 @@
+# 이미지 빌드 컨텍스트에서 제외 (빌드는 컨테이너 안에서 새로 수행)
+.git
+.gradle
+build/
+.idea
+.vscode
+.gstack
+docs
+*.md
+HANDOFF.md
+HELP.md
