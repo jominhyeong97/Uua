@@ -2,21 +2,20 @@
 
 > 이 프로젝트에서 Claude(Claude Code)를 켰을 때 **가장 먼저 읽는 파일**입니다. (작업은 IntelliJ가 아니라 Claude Code에서 진행 중)
 > 전체 설계는 `docs/DESIGN.md` (Status: APPROVED). 이 핸드오프는 "지금 어디까지 됐고 다음에 뭘 하나"를 담습니다.
-> 최종 갱신: 2026-05-26 (밤, 작업 종료)
+> 최종 갱신: 2026-05-27 (단계① 공개배포 완료)
 
 ---
 
-## ⏭️ 내일 여기서 시작 (2026-05-27)
+## ⏭️ 여기서 시작 (다음 세션)
 
-**개발규칙·PRD·비용조사·git분리·단계① 로컬검증까지 다 끝남.** 내일은 **코딩 단계**부터.
-다음 둘 중 하나를 고르면 됨 (사용자에게 물어볼 것):
+**단계 ① 공개배포까지 완료됨.** 🌐 라이브: **https://uua.onrender.com/actuator/health** → 200.
+다음은 **단계 ② = 쓰기 API** (코딩 단계):
 
-1. **단계 ① 마무리 = 공개 배포** — Render(앱) + Neon(DB) 무료 배포 + `/actuator/health` 공개 200.
-   계정 로그인은 사용자가 `!` 명령으로 직접. JVM `-Xmx` 튜닝(512MB OOM 방지) 검증 포함. 배포 과정 Notion 기록.
-2. **단계 ② = 쓰기 API** — `MemoryItem` 엔티티 + `EmbeddingClient`(Gemini `gemini-embedding-001`) + `POST /api/memories`
-   + 입력검증 + 임베딩 실패경로(503, 원자성). 배포는 나중에.
+- `MemoryItem` 엔티티(@Entity, embedding은 JdbcTemplate/네이티브로 read/write)
+- `EmbeddingClient`(Gemini `gemini-embedding-001`, 768차원)
+- `POST /api/memories` + 입력검증(@NotBlank·길이) + 임베딩 실패경로(503, 원자성: 행 저장 안 함)
 
-→ 어느 쪽이든 **작업 결과를 Notion "Uua 프로젝트" 하위에 문서화**하며 진행 (개발규칙·PRD는 이미 작성됨, 아래 6번 링크).
+→ **작업 결과를 Notion "Uua 프로젝트" 하위에 문서화**하며 진행 (아래 6번 링크).
 
 ---
 
@@ -52,6 +51,13 @@
   - `src/main/resources/db/migration/V1__init.sql` → `CREATE EXTENSION vector` + `memory_item` 테이블(`vector(768)`).
   - 검증됨: `./gradlew bootRun` → pgvector 컨테이너 자동기동 → Flyway v1 적용 →
     `/actuator/health` 200 → DB에 `vector` 확장 + `memory_item` 테이블 확인.
+- ✅ **(2026-05-27) 단계 ① 공개배포 완료** (커밋 `8723ac2`):
+  - `Dockerfile`(멀티스테이지 JDK빌드→JRE실행, `MaxRAMPercentage=60 + SerialGC`로 512MB OOM 방지), `.dockerignore`,
+    `server.port=${PORT:8080}` 추가.
+  - GitHub public 저장소: https://github.com/jominhyeong97/Uua
+  - **Neon**(무료 Postgres, pgvector) DB 생성 → 로컬에서 jar를 Neon에 붙여 Flyway v1 적용까지 선검증(de-risking).
+  - **Render**(무료 웹서비스, Docker, Singapore) 배포 + `SPRING_DATASOURCE_*` env(Neon) → **라이브: https://uua.onrender.com**.
+  - 배포 전과정 Notion 기록: "단계① 공개배포 기록 (Render + Neon)" 페이지.
 
 ---
 
