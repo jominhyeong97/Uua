@@ -2,20 +2,33 @@
 
 > 이 프로젝트에서 Claude(Claude Code)를 켰을 때 **가장 먼저 읽는 파일**입니다. (작업은 IntelliJ가 아니라 Claude Code에서 진행 중)
 > 전체 설계는 `docs/DESIGN.md` (Status: APPROVED). 이 핸드오프는 "지금 어디까지 됐고 다음에 뭘 하나"를 담습니다.
-> 최종 갱신: 2026-05-27 (단계① 공개배포 완료)
+> 최종 갱신: 2026-05-31 (단계② 코드 완료 + 로컬 검증, 라이브 201은 다음 세션)
 
 ---
 
 ## ⏭️ 여기서 시작 (다음 세션)
 
-**단계 ① 공개배포까지 완료됨.** 🌐 라이브: **https://uua.onrender.com/actuator/health** → 200.
-다음은 **단계 ② = 쓰기 API** (코딩 단계):
+**단계 ② 코드 작성·로컬 검증까지 완료.** 11개 자동 테스트(unit 6 + slice 4 + integration 1) 통과 + 로컬 curl 3케이스(400/413/503 + 행 미저장) 통과. 🌐 라이브: **https://uua.onrender.com/actuator/health** → 200.
 
-- `MemoryItem` 엔티티(@Entity, embedding은 JdbcTemplate/네이티브로 read/write)
-- `EmbeddingClient`(Gemini `gemini-embedding-001`, 768차원)
-- `POST /api/memories` + 입력검증(@NotBlank·길이) + 임베딩 실패경로(503, 원자성: 행 저장 안 함)
+다음 세션 시작 시 **2가지를 순서대로**:
 
-→ **작업 결과를 Notion "Uua 프로젝트" 하위에 문서화**하며 진행 (아래 6번 링크).
+### (a) 단계 ② 라이브 마무리 — 정상 201 스모크 1건
+1. https://aistudio.google.com/app/apikey 에서 **무료 Gemini API 키** 발급(결제계정 불필요).
+2. Render 대시보드 → Uua 웹서비스 → Environment → `GEMINI_API_KEY` 추가 → Save.
+3. 자동 재배포 완료 후 curl로 정상 201 확인:
+   ```bash
+   curl -X POST https://uua.onrender.com/api/memories \
+     -H 'Content-Type: application/json' \
+     -d '{"text":"render smoke test","projectKey":"uua-render"}'
+   ```
+   기대: `201` + `{"id":..., "projectKey":"uua-render", "createdAt":"...", "tokenCount":4}`
+4. 결과를 Notion에 **"단계② 구현 기록"** 페이지로 남김(단계① 배포 기록과 동일 형식).
+
+### (b) 단계 ③ = 읽기 API
+- `MemoryJdbcRepository.search(float[], int k)` 구현 — 네이티브 SQL `ORDER BY embedding <=> CAST(? AS vector(768)) LIMIT ?`
+- `EmbeddingClient.embed(query)` 재사용 — 질문 임베딩
+- `POST /api/context` — finalScore(cosineSim + 0.1·exp(-age/30)) 정렬 → 토큰버짓 그리디 조립 → 컨텍스트 팩
+- DESIGN.md "v1 구체 스펙" + PRD §6 알고리즘 그대로 구현.
 
 ---
 
@@ -58,12 +71,22 @@
   - **Neon**(무료 Postgres, pgvector) DB 생성 → 로컬에서 jar를 Neon에 붙여 Flyway v1 적용까지 선검증(de-risking).
   - **Render**(무료 웹서비스, Docker, Singapore) 배포 + `SPRING_DATASOURCE_*` env(Neon) → **라이브: https://uua.onrender.com**.
   - 배포 전과정 Notion 기록: "단계① 공개배포 기록 (Render + Neon)" 페이지.
+- ✅ **(2026-05-31) 단계 ② 쓰기 API 코드 완료 + 로컬 검증** (커밋 예정):
+  - **신규 패키지**: `com.uua.embedding`(`EmbeddingClient` 인터페이스 + `EmbeddingException` + `GeminiEmbeddingClient`(RestClient) + `EmbeddingProperties`),
+    `com.uua.memory`(`MemoryItem` JPA 엔티티(+ embedding `@Transient`) + `MemoryRepository` + `MemoryJdbcRepository`(단일 INSERT RETURNING) + `MemoryService`(@Transactional) + `MemoryController`(POST /api/memories) + DTO 2개),
+    `com.uua.common`(`GlobalExceptionHandler` — 400/413/503 매핑).
+  - **설정**: `application.properties`에 `gemini.*` 5개 키 추가(env 폴백), `UuaApplication`에 `@ConfigurationPropertiesScan`.
+  - **테스트(11개 통과)**: `GeminiEmbeddingClientTest`(MockWebServer, 6케이스), `MemoryControllerTest`(@WebMvcTest, 4케이스), `MemoryCreateIntegrationTest`(Testcontainers + pgvector, 1케이스).
+  - **로컬 curl 스모크 3/4 통과**(400/413/503 + 행 미저장 확인). 정상 201은 GEMINI_API_KEY 필요 → 다음 세션 (a)에서.
+  - **빌드 우회 2개**: `gradle.properties` + `build.gradle`에 `buildDir = C:/temp/uua-build` (한글 경로 워커 JVM `ClassNotFoundException` 회피), MockWebServer 4.12.0 명시 버전.
+  - **자잘한 함정 1개**: V1__init.sql 주석 수정 시 Flyway checksum mismatch — 원복하고 옛 모델명은 `EmbeddingProperties` Javadoc에 노트로.
+  - Notion 작성물: 📐 단계② 상세 PRD — 쓰기 API(설계), (다음 세션) "단계② 구현 기록" 페이지 작성 예정.
 
 ---
 
-## 2. 다음 할 일 — 단계 ① 마무리(공개 배포) → 단계 ②
+## 2. 다음 할 일 — 단계 ② 라이브 마무리 → 단계 ③ (읽기 API)
 
-**단계 ①에서 남은 것: 공개 배포 1개.** (비용 조사 완료 — 아래 무료 스택 확정)
+자세한 시작 순서는 맨 위 "⏭️ 여기서 시작" 섹션 참고. 아래 무료 스택은 단계 ② 이후도 동일.
 
 ### 무료 스택 (2026-05-26 공식 페이지 조사, "비용 0" 성공기준 ⓑ 근거)
 
