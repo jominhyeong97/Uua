@@ -156,12 +156,22 @@ python uua_mcp.py --test-call "카프카 결정"
     3) `POST /api/context "카프카 결정"` → 200, items에 인입한 텍스트 포함
     4) `GET /api/usage/summary` → today: embedCalls=3, successes=3, failures=0, tokensTotal=22 (4+17+1 정확히 추적)
   - PowerShell 함정: `curl`은 `Invoke-WebRequest` 별칭이라 `-H`/`-d` 안 먹음. `Invoke-RestMethod` + `[System.Text.Encoding]::UTF8.GetBytes($json)` 패턴이 정답(한글 인코딩 정상).
-- 🚧 **(2026-05-31) 단계 ⑥B MCP 래퍼 코드 작성** (커밋 예정, Python 설치 대기):
-  - `mcp/uua_mcp.py` — FastMCP 기반, 도구 `recall_context(query, project_key?, max_tokens?, top_k?)` 1개 노출. 내부는 `POST {UUA_BASE_URL}/api/context` 호출. `--test-call` 모드(MCP 프로토콜 없이 HTTP만 검증)도 포함.
-  - `mcp/requirements.txt` — `mcp[cli]>=1.0.0`, `httpx>=0.27.0`.
-  - `mcp/README.md` — Python venv 셋업 + Claude Code 등록 가이드 + 트러블슈팅.
-  - `mcp/.gitignore` — `.venv/`, `__pycache__/`.
-  - 검증 못함: Windows에 Python 정식 설치본 없음(WindowsApps 스텁만). 다음 세션 (a)에서 winget으로 Python 설치 후 진행.
+- ✅ **(2026-05-31) 단계 ⑥B MCP 래퍼 작성 + 라이브 검증 + dogfood 등록** (커밋 `16e1464`, `50b3712`):
+  - `mcp/uua_mcp.py` — FastMCP 기반, 도구 `recall_context(query, project_key?, max_tokens?, top_k?)` 1개 노출. 내부는 `POST {UUA_BASE_URL}/api/context` 호출. `--test-call` 모드(MCP 프로토콜 없이 HTTP만 검증) 포함.
+  - `mcp/requirements.txt`(`mcp[cli]>=1.0.0`, `httpx>=0.27.0`), `mcp/README.md`, `mcp/.gitignore`.
+  - **Python 3.12.10 설치**(winget), `mcp/.venv` 생성, `pip install` 36개 패키지 성공.
+  - `--test-call "카프카 결정"` 결과: items[0]=memory:2(score 0.80), items[1]=memory:1(score 0.61). 알고리즘 정렬 + 한글 인코딩 정상.
+  - **D2 결정**: `UUA_PROJECT_KEY` 기본값을 `uua` → `uua-render`로 수정(`50b3712`). 단계②~⑤ 라이브 검증과 dogfood 본 시작을 같은 키에 누적.
+  - Claude Code 등록: `claude mcp add -s user uua ...` → `✓ Connected`. user scope로 모든 세션 가시.
+- ✅ **(2026-05-31) 단계 ⑥A recall@K 평가셋 코드 + 라이브 측정** (커밋 예정):
+  - `eval/runner.py` — golden.json 로드 → /api/context 호출 → "expected_sources 중 1개 이상이 items에 들어왔나"로 hit/miss 집계 → 콘솔 표 + `results-{timestamp}.json` 저장. Render 콜드스타트 warmup 포함.
+  - `eval/golden.json` — v1 시드 4 페어(memory:1 + memory:2 기반 쿼리들).
+  - `eval/requirements.txt`(`httpx`), `eval/README.md`(셋업 + Assignment + 점수 해석 + 튜닝 포인트), `eval/.gitignore`(`.venv/`, `results-*.json`).
+  - **별도 venv** (`eval/.venv`) — mcp/와 분리.
+  - **라이브 측정 결과**: recall@20 = **4/4 = 100.0%**. 카프카(0.80), ORBIT(0.77), 사가 패턴(0.83), render smoke(0.94). 첫 쿼리 40.7s(콜드스타트), 나머지 ~500-700ms.
+  - **함정**: 100%는 시드 작아서 "가짜". 실제 handoff ingest 후 다시 측정해야 진짜 신호.
+  - **환경 함정**: Claude Code 도구 환경의 PowerShell은 winget으로 설치한 Python을 PATH에서 못 찾음(Windows Store 스텁 우선) → 절대경로 `C:\Users\user\AppData\Local\Programs\Python\Python312\python.exe` 사용 필요.
+  - **형 숙제 (다음 세션)**: handoff 문서 3-5개 모아서 `POST /api/sessions/{id}/ingest`로 인입 → 새 memory_id 확보 → golden.json 확장 → recall 재측정.
 
 ---
 
@@ -214,8 +224,9 @@ python uua_mcp.py --test-call "카프카 결정"
 4. ✅ 자동 핸드오프 인입(고정창 청킹 + 임베딩 스로틀)  *LLM 요약 없음*
 5. ✅ 비용/남용 방어(입력가드·레이트리밋·일일상한+킬스위치·UsageLog) + `GET /api/usage/summary` + **라이브 4건 스모크 통과**
 6. 🚧 미니 평가셋(recall@K) + 얇은 stdio MCP 래퍼 + dogfood 연결 + README/ADR
-   - ⑥B 코드 작성됨, Python 설치 후 검증 + dogfood 시작
-   - ⑥A 평가셋 + ⑥C README/ADR 미착수
+   - ✅ ⑥B MCP 래퍼: 작성 + --test-call 검증 + Claude Code 등록(user scope, Connected)
+   - ✅ ⑥A 평가셋: 작성 + 라이브 측정(recall@20 = 4/4 = 100% on seed)
+   - 🚧 ⑥C README/ADR 미착수
 
 성공 기준: ⓐ매일 실사용 ⓑ공개 데모+사용량으로 "비용 0" 숫자 증명 ⓒrecall@K 측정값 ⓓ ADR.
 

@@ -1,0 +1,31 @@
+{
+  "_comment": "손으로 만든 정답지. 'query를 던지면 expected_sources 중 적어도 하나가 items에 들어와야 PASS.' v1 시드는 라이브 데이터(memory:1, memory:2)로 만든 4건. 실제 handoff ingest 후엔 사용자가 직접 추가/수정.",
+  "default_top_k": 20,
+  "default_max_tokens": 1000,
+  "pairs": [
+    {
+      "query": "카프카 결정",
+      "project_key": "uua-render",
+      "expected_sources": ["memory:2"],
+      "description": "단계④ ingest 결과: 카프카 보상 트랜잭션 메모"
+    },
+    {
+      "query": "ORBIT 워크스페이스 영향도",
+      "project_key": "uua-render",
+      "expected_sources": ["memory:2"],
+      "description": "같은 메모의 다른 키워드 — 의미검색 검증"
+    },
+    {
+      "query": "사가 패턴 트랜잭션",
+      "project_key": "uua-render",
+      "expected_sources": ["memory:2"],
+      "description": "용어 기반 검색 — 단순 키워드 매치가 아닌 임베딩 효과 검증"
+    },
+    {
+      "query": "render smoke",
+      "project_key": "uua-render",
+      "expected_sources": ["memory:1"],
+      "description": "단계② 쓰기 스모크 메모 — 짧은 쿼리 매칭"
+    }
+  ]
+}
