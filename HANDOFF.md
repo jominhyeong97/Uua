@@ -2,7 +2,7 @@
 
 > 이 프로젝트에서 Claude(Claude Code)를 켰을 때 **가장 먼저 읽는 파일**입니다. (작업은 IntelliJ가 아니라 Claude Code에서 진행 중)
 > 전체 설계는 `docs/DESIGN.md` (Status: APPROVED). 이 핸드오프는 "지금 어디까지 됐고 다음에 뭘 하나"를 담습니다.
-> 최종 갱신: 2026-05-31 (단계 ②~⑤ 라이브 검증 완료 + 단계 ⑥B MCP 래퍼 코드 작성 — Python 설치 대기 중)
+> 최종 갱신: 2026-05-31 (v1 단계 ①~⑥ 모두 완료. README + ADR 6개까지 포함)
 
 ---
 
@@ -39,9 +39,12 @@ python uua_mcp.py --test-call "카프카 결정"
 - `eval/runner.py`가 `/api/context` 호출 → hit rate 계산 → 리포트
 - 청크 ID는 사전에 ingest해서 확보
 
-### (e) 단계 ⑥C: README + ADR
-- 루트 `README.md` (한 줄 요약 + ASCII 다이어그램 + 라이브 링크 + 실행법)
-- `docs/adr/` 6개 (Approach A / 네이티브 SQL / 부분 커밋 / 데코레이터 / 모델 변경 / 413 분기)
+### (e) ✅ 완료 — README + ADR 6개 모두 작성됨 (이번 세션)
+
+### (f) 다음 세션 우선순위
+1. **dogfood 검증**: 새 Claude Code 세션에서 자연어로 `recall_context` 자동 호출되는지 확인
+2. **형 숙제**: 실제 handoff 3-5개 ingest → 새 memory_id 확보 → `eval/golden.json` 확장 → 재측정
+3. v1 회고: README의 면접 한 줄 다듬기, 측정 결과(70-85% 예상) Notion에 기록
 
 다음 세션 시작 시 **2가지를 순서대로**:
 
@@ -223,10 +226,12 @@ python uua_mcp.py --test-call "카프카 결정"
 3. ✅ 읽기 API(top-K + 최신성 + 토큰버짓 컨텍스트 팩) + 출처 인용
 4. ✅ 자동 핸드오프 인입(고정창 청킹 + 임베딩 스로틀)  *LLM 요약 없음*
 5. ✅ 비용/남용 방어(입력가드·레이트리밋·일일상한+킬스위치·UsageLog) + `GET /api/usage/summary` + **라이브 4건 스모크 통과**
-6. 🚧 미니 평가셋(recall@K) + 얇은 stdio MCP 래퍼 + dogfood 연결 + README/ADR
+6. ✅ 미니 평가셋(recall@K) + 얇은 stdio MCP 래퍼 + dogfood 연결 + README/ADR
    - ✅ ⑥B MCP 래퍼: 작성 + --test-call 검증 + Claude Code 등록(user scope, Connected)
    - ✅ ⑥A 평가셋: 작성 + 라이브 측정(recall@20 = 4/4 = 100% on seed)
-   - 🚧 ⑥C README/ADR 미착수
+   - ✅ ⑥C README + ADR 6개(001~006) + adr/README 인덱스
+
+**🎉 v1 완료.** 남은 건 형 숙제 — 실제 handoff 3-5개 ingest로 golden 확장 + 재측정.
 
 성공 기준: ⓐ매일 실사용 ⓑ공개 데모+사용량으로 "비용 0" 숫자 증명 ⓒrecall@K 측정값 ⓓ ADR.
 
