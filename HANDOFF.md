@@ -2,13 +2,46 @@
 
 > 이 프로젝트에서 Claude(Claude Code)를 켰을 때 **가장 먼저 읽는 파일**입니다. (작업은 IntelliJ가 아니라 Claude Code에서 진행 중)
 > 전체 설계는 `docs/DESIGN.md` (Status: APPROVED). 이 핸드오프는 "지금 어디까지 됐고 다음에 뭘 하나"를 담습니다.
-> 최종 갱신: 2026-05-31 (단계 ②/③/④/⑤ 코드 완료 + 로컬 56 테스트 통과, 라이브 스모크는 다음 세션)
+> 최종 갱신: 2026-05-31 (단계 ②~⑤ 라이브 검증 완료 + 단계 ⑥B MCP 래퍼 코드 작성 — Python 설치 대기 중)
 
 ---
 
 ## ⏭️ 여기서 시작 (다음 세션)
 
-**단계 ②~⑤ 코드 작성·로컬 검증까지 완료.** 56개 자동 테스트 통과(② 11 + ③ 13 + ④ 17 + ⑤ 14 + 부팅 1). 🌐 라이브: **https://uua.onrender.com/actuator/health** → 200.
+**단계 ②~⑤ 라이브 검증 완료.** 4건 curl 스모크(쓰기/인입/읽기/usage summary) 모두 통과. Render 라이브 + Gemini 키 등록 + usage_log 정상 누적 확인.
+**단계 ⑥B (MCP 래퍼) 코드 작성됨.** `mcp/uua_mcp.py` (Python FastMCP + httpx, recall_context 도구 1개). 검증은 Python 설치 후 다음 세션.
+
+다음 세션 시작 시 **3가지를 순서대로**:
+
+### (a) Windows에 Python 3.10+ 설치 (~5분, 형이 직접)
+```powershell
+winget install -e --id Python.Python.3.12
+```
+또는 https://www.python.org/downloads/ 에서 인스톨러. **반드시 "Add to PATH" 체크.** 설치 후 새 PowerShell 열어 `python --version` → `Python 3.12.x` 확인.
+
+### (b) MCP 서버 venv 셋업 + 스모크
+```powershell
+cd "C:\Users\user\개인 프로젝트\Uua\mcp"
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python uua_mcp.py --test-call "카프카 결정"
+```
+기대: `/api/context` 응답 JSON(pack/items/usedTokens/maxTokens)이 그대로 출력.
+
+### (c) Claude Code에 MCP 등록 + dogfooding 시작
+`mcp/README.md`의 "Claude Code에 MCP 등록" 섹션 따라 config 편집 + 재시작. 등록 끝나면 새 세션에서:
+> "uua에서 어제 결정한 카프카 결정 메모리 가져와줘"
+하면 자동으로 recall_context 호출.
+
+### (d) 단계 ⑥A: recall@K 평가셋
+- `eval/golden.json`에 (query, expected_chunk_ids[]) 5-6쌍 손으로 작성
+- `eval/runner.py`가 `/api/context` 호출 → hit rate 계산 → 리포트
+- 청크 ID는 사전에 ingest해서 확보
+
+### (e) 단계 ⑥C: README + ADR
+- 루트 `README.md` (한 줄 요약 + ASCII 다이어그램 + 라이브 링크 + 실행법)
+- `docs/adr/` 6개 (Approach A / 네이티브 SQL / 부분 커밋 / 데코레이터 / 모델 변경 / 413 분기)
 
 다음 세션 시작 시 **2가지를 순서대로**:
 
@@ -107,13 +140,28 @@
   - **테스트(17개 통과, 누적 42개)**: `ChunkerTest`(7) — 0/짧음/딱맞음/1초과/정확배수/한글/잘못된 윈도우, `IngestServiceTest`(4) — 빈 text/정상 2청크 sleep 호출수/중간실패 부분커밋/첫 청크 실패 committed=0, `IngestControllerTest`(4) — 201/400빈/400 200001자/503, `IngestIntegrationTest`(2) — Testcontainers 4000자→2청크 source=INGEST + 4001자→3청크 마지막 1자.
   - **함정 1개 발견·수정**: text 필드명 단계②(max=8000)와 단계④(max=200000)가 충돌 → 413 분기에서 `FieldError.getArguments()`로 max 값 직접 확인.
   - Notion 작성물: 📐 단계④ 상세 PRD — Ingest API.
-- ✅ **(2026-05-31) 단계 ⑤ 비용/남용 방어 + Usage Summary 코드 완료 + 로컬 검증** (커밋 예정):
+- ✅ **(2026-05-31) 단계 ⑤ 비용/남용 방어 + Usage Summary 코드 완료 + 로컬 검증** (커밋 `805ada4`):
   - **신규 패키지** `com.uua.usage` (7 파일): `UsageProperties`(embeddingEnabled, dailyCap), `UsageJdbcRepository`(insert + 4 집계 쿼리), `UsageRecorder`(`@Transactional(REQUIRES_NEW)` + DataAccessException 삼키기), `UsageLimiter`(UTC 자정 기준 SUCCESS 카운트 체크), `UsageSummary`(Today/LastWindow/Limits 중첩 record), `UsageQueryService`(Clock 주입), `UsageController`(GET /api/usage/summary).
   - **신규** `com.uua.embedding.UsageGuardedEmbeddingClient`: **데코레이터 패턴**. GeminiEmbeddingClient를 감싸 kill switch → limiter.check() → delegate.embed() → recorder.record() 순서로 처리. EmbeddingClient 인터페이스의 유일 구현체.
   - **기존 파일 수정**: `V2__usage_log.sql` 추가, `EmbeddingException.Reason`에 KILLED/DAILY_LIMIT enum 추가, `GeminiEmbeddingClient`에서 `implements EmbeddingClient` + `@Override` 제거(데코레이터가 인터페이스 소유), `application.properties`에 `usage.*` 2개 키 추가.
   - **테스트(14개 통과, 누적 56개)**: `UsageLimiterTest`(4) — 한도 미만/같음/초과 + UTC 자정 since 검증, `UsageQueryServiceTest`(3) — Today+Week+Limits 조립 + 킬스위치 + remainingToday 0 clamp, `UsageGuardedEmbeddingClientTest`(5) — KILLED/DAILY_LIMIT/SUCCESS/FAILURE 4경로 + approxTokens 검증, `UsageControllerTest`(1) — @WebMvcTest summary JSON 구조, `UsageIntegrationTest`(1) — Testcontainers + MockWebServer(Gemini 모방), POST /api/memories → usage_log SUCCESS 1행 → summary 반영.
   - **함정 2개**: GeminiEmbeddingClient에서 `implements EmbeddingClient` 떼면 `@Override`도 함께 제거 필요(컴파일 에러 한 번 났음), Mockito `private static ArgumentMatcher<Instant> any()` 헬퍼는 매처를 반환해 Instant 시그니처와 안 맞음 — `ArgumentMatchers.any(Instant.class)` 직접 호출이 정답.
   - Notion 작성물: 📐 단계⑤ 상세 PRD — 비용/남용 방어 + Usage Summary.
+- ✅ **(2026-05-31) 단계 ②~⑤ 라이브 스모크 4건 통과** (커밋 `f03b82e` 후):
+  - Gemini 키 발급 → Render `GEMINI_API_KEY` 등록 → 자동 재배포 성공.
+  - **Render Docker 빌드 실패 1회 해결**: `build.gradle`의 `layout.buildDirectory.set(file('C:/temp/uua-build'))`이 Linux 빌드에서 `/app/C:/temp/uua-build`로 출력 → Dockerfile의 `COPY --from=build /app/build/libs/*.jar` 가 빈 경로를 매칭해 실패. `OperatingSystem.current().isWindows()` 분기로 Windows에서만 적용하도록 수정 (커밋 `f03b82e`).
+  - 4건 curl 스모크 PowerShell(Invoke-RestMethod + UTF-8 bytes 변환)로 통과:
+    1) `POST /api/memories` → 201, id=1
+    2) `POST /api/sessions/smoke-1/ingest` → 201, chunks=1, tokens=17
+    3) `POST /api/context "카프카 결정"` → 200, items에 인입한 텍스트 포함
+    4) `GET /api/usage/summary` → today: embedCalls=3, successes=3, failures=0, tokensTotal=22 (4+17+1 정확히 추적)
+  - PowerShell 함정: `curl`은 `Invoke-WebRequest` 별칭이라 `-H`/`-d` 안 먹음. `Invoke-RestMethod` + `[System.Text.Encoding]::UTF8.GetBytes($json)` 패턴이 정답(한글 인코딩 정상).
+- 🚧 **(2026-05-31) 단계 ⑥B MCP 래퍼 코드 작성** (커밋 예정, Python 설치 대기):
+  - `mcp/uua_mcp.py` — FastMCP 기반, 도구 `recall_context(query, project_key?, max_tokens?, top_k?)` 1개 노출. 내부는 `POST {UUA_BASE_URL}/api/context` 호출. `--test-call` 모드(MCP 프로토콜 없이 HTTP만 검증)도 포함.
+  - `mcp/requirements.txt` — `mcp[cli]>=1.0.0`, `httpx>=0.27.0`.
+  - `mcp/README.md` — Python venv 셋업 + Claude Code 등록 가이드 + 트러블슈팅.
+  - `mcp/.gitignore` — `.venv/`, `__pycache__/`.
+  - 검증 못함: Windows에 Python 정식 설치본 없음(WindowsApps 스텁만). 다음 세션 (a)에서 winget으로 Python 설치 후 진행.
 
 ---
 
@@ -164,8 +212,10 @@
 2. ✅ `MemoryItem` 도메인 + `EmbeddingClient`(Gemini) + 쓰기 API + pgvector 저장(네이티브 SQL) + 입력검증·실패경로
 3. ✅ 읽기 API(top-K + 최신성 + 토큰버짓 컨텍스트 팩) + 출처 인용
 4. ✅ 자동 핸드오프 인입(고정창 청킹 + 임베딩 스로틀)  *LLM 요약 없음*
-5. ✅ 비용/남용 방어(입력가드·레이트리밋·일일상한+킬스위치·UsageLog) + `GET /api/usage/summary`  ← **여기 코드까지 끝. 라이브 스모크 남음**
-6. 미니 평가셋(recall@K) + 얇은 stdio MCP 래퍼 + dogfood 연결 + README/ADR  ← **다음, v1 마지막 단계**
+5. ✅ 비용/남용 방어(입력가드·레이트리밋·일일상한+킬스위치·UsageLog) + `GET /api/usage/summary` + **라이브 4건 스모크 통과**
+6. 🚧 미니 평가셋(recall@K) + 얇은 stdio MCP 래퍼 + dogfood 연결 + README/ADR
+   - ⑥B 코드 작성됨, Python 설치 후 검증 + dogfood 시작
+   - ⑥A 평가셋 + ⑥C README/ADR 미착수
 
 성공 기준: ⓐ매일 실사용 ⓑ공개 데모+사용량으로 "비용 0" 숫자 증명 ⓒrecall@K 측정값 ⓓ ADR.
 
