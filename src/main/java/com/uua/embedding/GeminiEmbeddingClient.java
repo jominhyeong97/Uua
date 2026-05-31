@@ -21,9 +21,13 @@ import java.util.Map;
  * 상위(MemoryService→Controller→GlobalExceptionHandler)는 그저 503으로 매핑하면 된다.
  *
  * 호출마다 INFO 한 줄: latency_ms + outcome enum. text 본문이나 api-key는 절대 로그에 찍지 않는다.
+ *
+ * <p>단계 ⑤부터 {@link EmbeddingClient} 인터페이스를 더 이상 직접 구현하지 않는다 —
+ * {@link UsageGuardedEmbeddingClient}가 이 클래스를 감싸 킬스위치/일일상한/usage_log를 더한 뒤
+ * 인터페이스를 노출한다. 호출자 서비스들은 그 데코레이터를 주입받는다.
  */
 @Component
-public class GeminiEmbeddingClient implements EmbeddingClient {
+public class GeminiEmbeddingClient {
 
     private static final Logger log = LoggerFactory.getLogger(GeminiEmbeddingClient.class);
 
@@ -43,7 +47,6 @@ public class GeminiEmbeddingClient implements EmbeddingClient {
                 .build();
     }
 
-    @Override
     public float[] embed(String text) {
         // 1) api-key 미설정은 외부 호출 전에 차단 — 무료티어 키가 없는 상태에서 그래도 요청이 가는 걸 막는다.
         if (props.apiKey() == null || props.apiKey().isBlank()) {

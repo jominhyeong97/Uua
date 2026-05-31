@@ -2,20 +2,20 @@
 
 > 이 프로젝트에서 Claude(Claude Code)를 켰을 때 **가장 먼저 읽는 파일**입니다. (작업은 IntelliJ가 아니라 Claude Code에서 진행 중)
 > 전체 설계는 `docs/DESIGN.md` (Status: APPROVED). 이 핸드오프는 "지금 어디까지 됐고 다음에 뭘 하나"를 담습니다.
-> 최종 갱신: 2026-05-31 (단계 ②/③/④ 코드 완료 + 로컬 42 테스트 통과, 라이브 스모크는 다음 세션)
+> 최종 갱신: 2026-05-31 (단계 ②/③/④/⑤ 코드 완료 + 로컬 56 테스트 통과, 라이브 스모크는 다음 세션)
 
 ---
 
 ## ⏭️ 여기서 시작 (다음 세션)
 
-**단계 ②·③·④ 코드 작성·로컬 검증까지 완료.** 42개 자동 테스트 통과(단계② 11 + 단계③ 13 + 단계④ 17 + 부팅 1). 🌐 라이브: **https://uua.onrender.com/actuator/health** → 200.
+**단계 ②~⑤ 코드 작성·로컬 검증까지 완료.** 56개 자동 테스트 통과(② 11 + ③ 13 + ④ 17 + ⑤ 14 + 부팅 1). 🌐 라이브: **https://uua.onrender.com/actuator/health** → 200.
 
 다음 세션 시작 시 **2가지를 순서대로**:
 
-### (a) 단계 ②·③·④ 라이브 마무리 — Gemini 키 등록 + 정상 스모크 3건
+### (a) 단계 ②~⑤ 라이브 마무리 — Gemini 키 등록 + 정상 스모크 4건
 1. https://aistudio.google.com/app/apikey 에서 **무료 Gemini API 키** 발급(결제계정 불필요).
 2. Render 대시보드 → Uua 웹서비스 → Environment → `GEMINI_API_KEY` 추가 → Save.
-3. 자동 재배포 완료 후 curl 3건 확인:
+3. 자동 재배포 완료 후 curl 4건 확인:
    ```bash
    # 쓰기: 201
    curl -X POST https://uua.onrender.com/api/memories \
@@ -31,16 +31,17 @@
    curl -X POST https://uua.onrender.com/api/context \
      -H 'Content-Type: application/json' \
      -d '{"query":"render smoke","projectKey":"uua-render","maxTokens":1000}'
-   ```
-4. 결과를 Notion에 **"단계②·③·④ 구현 기록"** 페이지로 남김.
 
-### (b) 단계 ⑤ = 비용/남용 방어
-- 입력 가드(임베딩 호출 *전* 길이/빈문자열 차단) — 이미 단계 ② 검증으로 일부 있음
-- 임베딩 레이트리밋(Bucket4j or 직접 카운터) — 일일/시간당 상한
-- **킬스위치**: `INGEST_DISABLED=true` env로 즉시 차단
-- `UsageLog` 테이블: 호출별 endpoint/tokens/latency 기록
-- `GET /api/usage/summary` — 일일 합산 JSON (대시보드 없이도 "비용 0" 증명 가능)
-- 성공기준 ⓑ("공개 데모 + 비용 0 숫자 증명")의 핵심 단계
+   # 사용량 요약: 200 + today.successes ≥ 2
+   curl https://uua.onrender.com/api/usage/summary
+   ```
+4. 결과를 Notion에 **"단계②~⑤ 구현 기록"** 페이지로 남김.
+
+### (b) 단계 ⑥ = 미니 평가셋(recall@K) + MCP 래퍼 + README/ADR
+- 손으로 만든 정답지(쿼리 X에 대해 mnemo top-K가 손으로 고른 청크를 포함했는가)로 recall@K 측정
+- 얇은 stdio MCP 래퍼: `recall_context` 도구가 `/api/context` 호출
+- 본인 Claude Code/Gemini에 MCP 등록해 dogfooding 시작
+- README + ADR: 임베딩/벡터검색/토큰버짓/MCP 결정 기록
 
 ---
 
@@ -99,13 +100,20 @@
   - **알고리즘**: `cosineSim = 1 - distance` + `recency = exp(-ageDays/30)` → `finalScore = cosineSim + 0.1·recency` 내림차순 → token 예산 안에서 그리디 누적(초과 직전에 멈춤).
   - **테스트(13개 통과, 누적 25개)**: `ContextServiceTest`(6) — 정렬/그리디/0건/임베딩 503 전파/source 형식/topK 전달, `ContextControllerTest`(5) — 400/413/maxTokens 400/503/정상 200, `ContextSearchIntegrationTest`(2) — Testcontainers + pgvector, 키워드별 결정적 fake 벡터로 의미 ordering + projectKey 격리.
   - Notion 작성물: 📐 단계③ 상세 PRD — 읽기 API.
-- ✅ **(2026-05-31) 단계 ④ Ingest API 코드 완료 + 로컬 검증** (커밋 예정):
+- ✅ **(2026-05-31) 단계 ④ Ingest API 코드 완료 + 로컬 검증** (커밋 `9e0344c`):
   - **신규 패키지** `com.uua.ingest` (9 파일): `Chunker`(고정창 2000자 분할), `Sleeper`/`ThreadSleeper`(스로틀 추상화 — 테스트는 no-op), `IngestProperties`(throttle-millis=200, window-chars=2000), `IngestRequest`/`IngestResponse` DTO, `IngestPartialFailure`(부분 실패 예외), `IngestController`(POST /api/sessions/{id}/ingest, @Validated path variable @Size), `IngestService`(TransactionTemplate으로 청크별 트랜잭션).
   - **기존 파일 수정**: `application.properties`에 `ingest.*` 2개 키 추가, `GlobalExceptionHandler`에 `IngestPartialFailure` 503+committed/failedAt 매핑 + `ConstraintViolationException` 400 매핑 추가 + 413 분기를 "Size max=8000일 때만"으로 좁힘(ingest text max=200000과 구분).
   - **부분 커밋 결정**: 100청크 중 N번째 임베딩 실패 시 N-1개는 DB 유지 + 503 응답. v1엔 재시도 큐가 없어 전체 롤백 시 영구 실패 → RAG는 부분 데이터도 가치 있음.
   - **테스트(17개 통과, 누적 42개)**: `ChunkerTest`(7) — 0/짧음/딱맞음/1초과/정확배수/한글/잘못된 윈도우, `IngestServiceTest`(4) — 빈 text/정상 2청크 sleep 호출수/중간실패 부분커밋/첫 청크 실패 committed=0, `IngestControllerTest`(4) — 201/400빈/400 200001자/503, `IngestIntegrationTest`(2) — Testcontainers 4000자→2청크 source=INGEST + 4001자→3청크 마지막 1자.
   - **함정 1개 발견·수정**: text 필드명 단계②(max=8000)와 단계④(max=200000)가 충돌 → 413 분기에서 `FieldError.getArguments()`로 max 값 직접 확인.
   - Notion 작성물: 📐 단계④ 상세 PRD — Ingest API.
+- ✅ **(2026-05-31) 단계 ⑤ 비용/남용 방어 + Usage Summary 코드 완료 + 로컬 검증** (커밋 예정):
+  - **신규 패키지** `com.uua.usage` (7 파일): `UsageProperties`(embeddingEnabled, dailyCap), `UsageJdbcRepository`(insert + 4 집계 쿼리), `UsageRecorder`(`@Transactional(REQUIRES_NEW)` + DataAccessException 삼키기), `UsageLimiter`(UTC 자정 기준 SUCCESS 카운트 체크), `UsageSummary`(Today/LastWindow/Limits 중첩 record), `UsageQueryService`(Clock 주입), `UsageController`(GET /api/usage/summary).
+  - **신규** `com.uua.embedding.UsageGuardedEmbeddingClient`: **데코레이터 패턴**. GeminiEmbeddingClient를 감싸 kill switch → limiter.check() → delegate.embed() → recorder.record() 순서로 처리. EmbeddingClient 인터페이스의 유일 구현체.
+  - **기존 파일 수정**: `V2__usage_log.sql` 추가, `EmbeddingException.Reason`에 KILLED/DAILY_LIMIT enum 추가, `GeminiEmbeddingClient`에서 `implements EmbeddingClient` + `@Override` 제거(데코레이터가 인터페이스 소유), `application.properties`에 `usage.*` 2개 키 추가.
+  - **테스트(14개 통과, 누적 56개)**: `UsageLimiterTest`(4) — 한도 미만/같음/초과 + UTC 자정 since 검증, `UsageQueryServiceTest`(3) — Today+Week+Limits 조립 + 킬스위치 + remainingToday 0 clamp, `UsageGuardedEmbeddingClientTest`(5) — KILLED/DAILY_LIMIT/SUCCESS/FAILURE 4경로 + approxTokens 검증, `UsageControllerTest`(1) — @WebMvcTest summary JSON 구조, `UsageIntegrationTest`(1) — Testcontainers + MockWebServer(Gemini 모방), POST /api/memories → usage_log SUCCESS 1행 → summary 반영.
+  - **함정 2개**: GeminiEmbeddingClient에서 `implements EmbeddingClient` 떼면 `@Override`도 함께 제거 필요(컴파일 에러 한 번 났음), Mockito `private static ArgumentMatcher<Instant> any()` 헬퍼는 매처를 반환해 Instant 시그니처와 안 맞음 — `ArgumentMatchers.any(Instant.class)` 직접 호출이 정답.
+  - Notion 작성물: 📐 단계⑤ 상세 PRD — 비용/남용 방어 + Usage Summary.
 
 ---
 
@@ -155,9 +163,9 @@
 1. ✅ 뼈대 부팅 + 공개 배포(/health) + pgvector compose
 2. ✅ `MemoryItem` 도메인 + `EmbeddingClient`(Gemini) + 쓰기 API + pgvector 저장(네이티브 SQL) + 입력검증·실패경로
 3. ✅ 읽기 API(top-K + 최신성 + 토큰버짓 컨텍스트 팩) + 출처 인용
-4. ✅ 자동 핸드오프 인입(고정창 청킹 + 임베딩 스로틀)  *LLM 요약 없음*  ← **여기 코드까지 끝. 라이브 스모크 남음**
-5. 비용/남용 방어(입력가드·레이트리밋·일일상한+킬스위치·UsageLog) + `GET /api/usage/summary`  ← **다음**
-6. 미니 평가셋(recall@K) + 얇은 stdio MCP 래퍼 + dogfood 연결 + README/ADR
+4. ✅ 자동 핸드오프 인입(고정창 청킹 + 임베딩 스로틀)  *LLM 요약 없음*
+5. ✅ 비용/남용 방어(입력가드·레이트리밋·일일상한+킬스위치·UsageLog) + `GET /api/usage/summary`  ← **여기 코드까지 끝. 라이브 스모크 남음**
+6. 미니 평가셋(recall@K) + 얇은 stdio MCP 래퍼 + dogfood 연결 + README/ADR  ← **다음, v1 마지막 단계**
 
 성공 기준: ⓐ매일 실사용 ⓑ공개 데모+사용량으로 "비용 0" 숫자 증명 ⓒrecall@K 측정값 ⓓ ADR.
 

@@ -19,6 +19,10 @@ public class EmbeddingException extends RuntimeException {
         TIMEOUT,
         /** 응답은 200이지만 임베딩 길이가 설정한 dimension과 다르거나 형식이 어긋남. */
         INVALID_RESPONSE,
+        /** 단계 ⑤ 킬스위치(usage.embedding-enabled=false) — 외부 호출이 아예 발생하지 않음. */
+        KILLED,
+        /** 단계 ⑤ 일일 상한(usage.daily-cap) 도달 — 외부 호출이 아예 발생하지 않음. */
+        DAILY_LIMIT,
     }
 
     private final Reason reason;
