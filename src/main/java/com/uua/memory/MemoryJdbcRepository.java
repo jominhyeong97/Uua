@@ -13,6 +13,9 @@ import java.util.Locale;
  *
  * v1 쓰기 경로(단계 ②)는 JPA save 두 단계(INSERT + UPDATE)가 불가능하다(NOT NULL 제약).
  * 그래서 INSERT ... RETURNING id, created_at으로 한 번에 처리한다.
+ *
+ * 읽기 경로(단계 ③)는 ORDER BY embedding &lt;=&gt; q LIMIT k 네이티브 SQL로 top-K를 뽑는다.
+ * pgvector의 &lt;=&gt; 는 코사인 거리(0..2)다 — 호출자 ContextService에서 1-d로 유사도 환산.
  */
 @Repository
 public class MemoryJdbcRepository {
@@ -21,6 +24,20 @@ public class MemoryJdbcRepository {
             INSERT INTO memory_item (project_key, session_key, text, embedding, source, model, token_count)
             VALUES (?, ?, ?, CAST(? AS vector(768)), ?, ?, ?)
             RETURNING id, created_at
+            """;
+
+    // 동일 표현을 SELECT와 ORDER BY에서 두 번 평가하지 않도록 컬럼 별칭(distance)으로 한 번만 계산.
+    // 인덱스 없이 전수검색이라 사실상 큰 차이는 없지만 가독성·안전성 위주.
+    private static final String SEARCH_SQL = """
+            SELECT id,
+                   text,
+                   created_at,
+                   token_count,
+                   embedding <=> CAST(? AS vector(768)) AS distance
+            FROM memory_item
+            WHERE project_key = ?
+            ORDER BY distance
+            LIMIT ?
             """;
 
     private final JdbcTemplate jdbc;
@@ -62,13 +79,26 @@ public class MemoryJdbcRepository {
     }
 
     /**
-     * 단계 ③에서 사용할 의미검색 자리. 단계 ②에선 미구현.
+     * 단계 ③ 의미검색 top-K. project_key로 다른 프로젝트 메모리와 격리.
      *
-     * 구현 예정 SQL: ORDER BY embedding &lt;=&gt; CAST(? AS vector(768)) LIMIT ?
+     * @param projectKey 검색 대상 프로젝트(필수)
+     * @param queryVec   질문 임베딩 — 길이는 호출자가 보장(검증 안 함)
+     * @param k          최대 결과 수(>0)
+     * @return cosine distance 오름차순(=가까운 순) 리스트. 결과 0건이면 빈 리스트.
      */
-    @SuppressWarnings({"unused", "java:S1172"})
-    public List<MemoryItem> search(float[] queryVec, int k) {
-        throw new UnsupportedOperationException("search()는 단계 ③에서 구현 — 단계 ②에선 호출 금지");
+    public List<SearchHit> search(String projectKey, float[] queryVec, int k) {
+        String vectorLiteral = toVectorLiteral(queryVec);
+        return jdbc.query(
+                SEARCH_SQL,
+                (rs, rowNum) -> new SearchHit(
+                        rs.getLong("id"),
+                        rs.getString("text"),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getInt("token_count"),
+                        rs.getDouble("distance")
+                ),
+                vectorLiteral, projectKey, k
+        );
     }
 
     /**
@@ -89,4 +119,10 @@ public class MemoryJdbcRepository {
 
     /** insert()의 반환값 — DB가 생성한 id와 created_at. */
     public record Inserted(long id, Instant createdAt) {}
+
+    /**
+     * search()의 단일 행. distance는 pgvector 코사인 거리(0=동일, 2=정반대).
+     * 유사도(0..1)는 1 - distance/2가 정석이지만, 정규화 임베딩에선 1-d로도 충분 — 호출자가 결정.
+     */
+    public record SearchHit(long id, String text, Instant createdAt, int tokenCount, double distance) {}
 }

@@ -10,28 +10,30 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 모든 컨트롤러의 예외 → JSON 응답 매핑.
  *
- * 단계 ② 매핑(PRD §4 상태코드 표):
+ * 매핑(PRD §4 상태코드 표):
  * - Bean Validation 실패(@NotBlank 등) → 400 (field, message)
- * - text 길이 초과(@Size(max=8000)) → 413 (text_too_long)
+ * - 긴 본문(text/query) 길이 초과(@Size(max=8000)) → 413 (text_too_long)
  * - {@link EmbeddingException} → 503 (embedding_unavailable + cause enum)
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final int TEXT_MAX = 8000;
+    // 단계 ②의 text(POST /api/memories) + 단계 ③의 query(POST /api/context)는
+    // 모두 Size(max=8000)만 걸려있어 Size 위반 = 길이 초과로 단언 가능.
+    private static final Set<String> LONG_BODY_FIELDS = Set.of("text", "query");
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException ex) {
         List<FieldError> errors = ex.getBindingResult().getFieldErrors();
 
-        // text 필드의 Size 위반은 길이 초과 → 413으로 분기.
-        // (text엔 Size(max=8000)만 걸려있으므로 Size 위반 = 길이 초과로 단언 가능.)
         boolean textTooLong = errors.stream().anyMatch(e ->
-                "text".equals(e.getField()) && "Size".equals(e.getCode()));
+                LONG_BODY_FIELDS.contains(e.getField()) && "Size".equals(e.getCode()));
         if (textTooLong) {
             return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                     .body(Map.of(

@@ -2,33 +2,38 @@
 
 > 이 프로젝트에서 Claude(Claude Code)를 켰을 때 **가장 먼저 읽는 파일**입니다. (작업은 IntelliJ가 아니라 Claude Code에서 진행 중)
 > 전체 설계는 `docs/DESIGN.md` (Status: APPROVED). 이 핸드오프는 "지금 어디까지 됐고 다음에 뭘 하나"를 담습니다.
-> 최종 갱신: 2026-05-31 (단계② 코드 완료 + 로컬 검증, 라이브 201은 다음 세션)
+> 최종 갱신: 2026-05-31 (단계② 코드 완료 + 단계③ 읽기 API 코드 완료 + 로컬 25 테스트 통과, 라이브 스모크는 다음 세션)
 
 ---
 
 ## ⏭️ 여기서 시작 (다음 세션)
 
-**단계 ② 코드 작성·로컬 검증까지 완료.** 11개 자동 테스트(unit 6 + slice 4 + integration 1) 통과 + 로컬 curl 3케이스(400/413/503 + 행 미저장) 통과. 🌐 라이브: **https://uua.onrender.com/actuator/health** → 200.
+**단계 ②·③ 코드 작성·로컬 검증까지 완료.** 25개 자동 테스트 통과(단계② 11 + 단계③ 13 + 부팅 1). 🌐 라이브: **https://uua.onrender.com/actuator/health** → 200.
 
 다음 세션 시작 시 **2가지를 순서대로**:
 
-### (a) 단계 ② 라이브 마무리 — 정상 201 스모크 1건
+### (a) 단계 ②·③ 라이브 마무리 — Gemini 키 등록 + 정상 스모크
 1. https://aistudio.google.com/app/apikey 에서 **무료 Gemini API 키** 발급(결제계정 불필요).
 2. Render 대시보드 → Uua 웹서비스 → Environment → `GEMINI_API_KEY` 추가 → Save.
-3. 자동 재배포 완료 후 curl로 정상 201 확인:
+3. 자동 재배포 완료 후 curl로 정상 응답 2건 확인:
    ```bash
+   # 쓰기: 201
    curl -X POST https://uua.onrender.com/api/memories \
      -H 'Content-Type: application/json' \
      -d '{"text":"render smoke test","projectKey":"uua-render"}'
-   ```
-   기대: `201` + `{"id":..., "projectKey":"uua-render", "createdAt":"...", "tokenCount":4}`
-4. 결과를 Notion에 **"단계② 구현 기록"** 페이지로 남김(단계① 배포 기록과 동일 형식).
 
-### (b) 단계 ③ = 읽기 API
-- `MemoryJdbcRepository.search(float[], int k)` 구현 — 네이티브 SQL `ORDER BY embedding <=> CAST(? AS vector(768)) LIMIT ?`
-- `EmbeddingClient.embed(query)` 재사용 — 질문 임베딩
-- `POST /api/context` — finalScore(cosineSim + 0.1·exp(-age/30)) 정렬 → 토큰버짓 그리디 조립 → 컨텍스트 팩
-- DESIGN.md "v1 구체 스펙" + PRD §6 알고리즘 그대로 구현.
+   # 읽기: 200 + items에 위 메모가 1순위로 나와야 함
+   curl -X POST https://uua.onrender.com/api/context \
+     -H 'Content-Type: application/json' \
+     -d '{"query":"render smoke","projectKey":"uua-render","maxTokens":1000}'
+   ```
+4. 결과를 Notion에 **"단계②·③ 구현 기록"** 페이지로 남김.
+
+### (b) 단계 ④ = 자동 핸드오프 인입
+- `POST /api/sessions/{id}/ingest` — 세션 텍스트 덩어리 받아 고정창 청킹(500토큰)
+- 청크별 임베딩(스로틀: 순차 + delay)으로 무료티어 RPM 안 깨지기
+- 각 청크는 source="INGEST"로 단계 ② 저장 경로 재사용
+- LLM 요약은 **v1엔 없음**(v2). 원문 청크만 저장.
 
 ---
 
@@ -71,7 +76,7 @@
   - **Neon**(무료 Postgres, pgvector) DB 생성 → 로컬에서 jar를 Neon에 붙여 Flyway v1 적용까지 선검증(de-risking).
   - **Render**(무료 웹서비스, Docker, Singapore) 배포 + `SPRING_DATASOURCE_*` env(Neon) → **라이브: https://uua.onrender.com**.
   - 배포 전과정 Notion 기록: "단계① 공개배포 기록 (Render + Neon)" 페이지.
-- ✅ **(2026-05-31) 단계 ② 쓰기 API 코드 완료 + 로컬 검증** (커밋 예정):
+- ✅ **(2026-05-31) 단계 ② 쓰기 API 코드 완료 + 로컬 검증** (커밋 `2ca1d50`):
   - **신규 패키지**: `com.uua.embedding`(`EmbeddingClient` 인터페이스 + `EmbeddingException` + `GeminiEmbeddingClient`(RestClient) + `EmbeddingProperties`),
     `com.uua.memory`(`MemoryItem` JPA 엔티티(+ embedding `@Transient`) + `MemoryRepository` + `MemoryJdbcRepository`(단일 INSERT RETURNING) + `MemoryService`(@Transactional) + `MemoryController`(POST /api/memories) + DTO 2개),
     `com.uua.common`(`GlobalExceptionHandler` — 400/413/503 매핑).
@@ -80,7 +85,13 @@
   - **로컬 curl 스모크 3/4 통과**(400/413/503 + 행 미저장 확인). 정상 201은 GEMINI_API_KEY 필요 → 다음 세션 (a)에서.
   - **빌드 우회 2개**: `gradle.properties` + `build.gradle`에 `buildDir = C:/temp/uua-build` (한글 경로 워커 JVM `ClassNotFoundException` 회피), MockWebServer 4.12.0 명시 버전.
   - **자잘한 함정 1개**: V1__init.sql 주석 수정 시 Flyway checksum mismatch — 원복하고 옛 모델명은 `EmbeddingProperties` Javadoc에 노트로.
-  - Notion 작성물: 📐 단계② 상세 PRD — 쓰기 API(설계), (다음 세션) "단계② 구현 기록" 페이지 작성 예정.
+  - Notion 작성물: 📐 단계② 상세 PRD — 쓰기 API(설계), (다음 세션) "단계②·③ 구현 기록" 페이지 작성 예정.
+- ✅ **(2026-05-31) 단계 ③ 읽기 API 코드 완료 + 로컬 검증** (커밋 예정):
+  - **신규 패키지** `com.uua.context`: `ContextRequest`/`ContextResponse`(+ `ContextItem`) DTO 레코드 + `ContextController`(POST /api/context, 결과 0건도 200) + `ContextService`(점수 계산 + 그리디 조립, `Clock` 주입으로 테스트에서 시간 고정 가능).
+  - **기존 파일 수정**: `MemoryJdbcRepository.search(projectKey, queryVec, k)` 구현 (`<=>` 코사인 거리 ORDER BY + `SearchHit` 레코드), `GlobalExceptionHandler`에 `query` 필드 413 매핑 확장(`LONG_BODY_FIELDS={"text","query"}`), `UuaApplication`에 `Clock systemUTC` 빈 등록.
+  - **알고리즘**: `cosineSim = 1 - distance` + `recency = exp(-ageDays/30)` → `finalScore = cosineSim + 0.1·recency` 내림차순 → token 예산 안에서 그리디 누적(초과 직전에 멈춤).
+  - **테스트(13개 통과, 누적 25개)**: `ContextServiceTest`(6) — 정렬/그리디/0건/임베딩 503 전파/source 형식/topK 전달, `ContextControllerTest`(5) — 400/413/maxTokens 400/503/정상 200, `ContextSearchIntegrationTest`(2) — Testcontainers + pgvector, 키워드별 결정적 fake 벡터로 의미 ordering + projectKey 격리.
+  - Notion 작성물: 📐 단계③ 상세 PRD — 읽기 API (이번 세션에 작성).
 
 ---
 
@@ -127,10 +138,10 @@
 
 ## 4. 전체 단계 로드맵 (v1 = Approach A)
 
-1. 뼈대 부팅 + 공개 배포(/health) + pgvector compose  ← **지금 여기**
-2. `MemoryItem` 도메인 + `EmbeddingClient`(Gemini) + 쓰기 API + pgvector 저장(네이티브 SQL) + 입력검증·실패경로
-3. 읽기 API(top-K + 최신성 + 토큰버짓 컨텍스트 팩) + 출처 인용
-4. 자동 핸드오프 인입(고정창 청킹 + 임베딩 스로틀)  *LLM 요약 없음*
+1. ✅ 뼈대 부팅 + 공개 배포(/health) + pgvector compose
+2. ✅ `MemoryItem` 도메인 + `EmbeddingClient`(Gemini) + 쓰기 API + pgvector 저장(네이티브 SQL) + 입력검증·실패경로
+3. ✅ 읽기 API(top-K + 최신성 + 토큰버짓 컨텍스트 팩) + 출처 인용  ← **여기 코드까지 끝. 라이브 스모크 남음**
+4. 자동 핸드오프 인입(고정창 청킹 + 임베딩 스로틀)  *LLM 요약 없음*  ← **다음**
 5. 비용/남용 방어(입력가드·레이트리밋·일일상한+킬스위치·UsageLog) + `GET /api/usage/summary`
 6. 미니 평가셋(recall@K) + 얇은 stdio MCP 래퍼 + dogfood 연결 + README/ADR
 
