@@ -36,3 +36,6 @@ out/
 ### VS Code ###
 .vscode/
 .gstack/
+
+# OMC harness state (not part of project)
+.omc/

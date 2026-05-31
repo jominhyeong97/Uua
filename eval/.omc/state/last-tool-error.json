@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"git add HANDOFF.md eval/ && git commit -m \\\"$(cat <<'EOF'\\nfeat: 단계⑥A recall@K 평가셋 + 시드 라이브 측정(4/4 = 100%)\\n\\n- eval/runner.py: golden.json 로드 → /api/context 호출 → expected_sources 매칭으로\\n  ...",
-  "error": "Exit code 128\nfatal: pathspec 'HANDOFF.md' did not match any files",
-  "timestamp": "2026-05-31T09:24:26.917Z",
-  "retry_count": 1
-}
