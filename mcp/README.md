@@ -30,7 +30,7 @@ pip install -r requirements.txt
 | Var | Default | 의미 |
 |---|---|---|
 | `UUA_BASE_URL` | `https://uua.onrender.com` | 백엔드 루트 URL |
-| `UUA_PROJECT_KEY` | `uua` | recall_context 호출 시 기본 projectKey |
+| `UUA_PROJECT_KEY` | `uua-render` | recall_context 호출 시 기본 projectKey (단계②~⑤ 라이브 검증 + dogfood 본 시작 모두 같은 키에 누적) |
 | `UUA_HTTP_TIMEOUT` | `30` | HTTP 타임아웃(초) — Render 콜드스타트 60초 대비 여유 |
 
 ## 스모크 테스트 (MCP 프로토콜 없이)
@@ -63,7 +63,7 @@ Claude Code의 MCP 설정 파일에 아래 블록을 추가한다. 위치는 설
         "C:\\Users\\user\\개인 프로젝트\\Uua\\mcp\\uua_mcp.py"
       ],
       "env": {
-        "UUA_PROJECT_KEY": "uua"
+        "UUA_PROJECT_KEY": "uua-render"
       }
     }
   }

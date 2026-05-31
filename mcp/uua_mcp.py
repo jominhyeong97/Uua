@@ -17,7 +17,9 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 
 UUA_BASE_URL = os.getenv("UUA_BASE_URL", "https://uua.onrender.com")
-UUA_PROJECT_KEY_DEFAULT = os.getenv("UUA_PROJECT_KEY", "uua")
+# 단계 ②~⑤ 라이브 검증 + dogfood 본 시작 모두 같은 projectKey 위에 누적한다(D2 결정).
+# 이름을 바꾸고 싶으면 env로 덮어쓰기.
+UUA_PROJECT_KEY_DEFAULT = os.getenv("UUA_PROJECT_KEY", "uua-render")
 HTTP_TIMEOUT_SECONDS = float(os.getenv("UUA_HTTP_TIMEOUT", "30"))
 
 mcp = FastMCP("uua")
