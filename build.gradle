@@ -21,7 +21,12 @@ repositories {
 // sun.jnu.encoding(Cp949)이 build/classes 디렉터리 경로를 잘못 디코딩 → ClassNotFoundException.
 // 컴파일은 통과하지만 런타임에 클래스 못 찾는 문제 회피 — build 디렉터리만 ASCII 경로로 이동.
 // (build 디렉터리는 캐시/생성물이라 git ignore 대상, 이동해도 안전.)
-layout.buildDirectory.set(file('C:/temp/uua-build'))
+//
+// ⚠️ Windows에서만 적용 — Linux/macOS(특히 Render의 Docker 빌드)에서는 기본 `build/`를 써야
+//    Dockerfile의 `COPY --from=build /app/build/libs/*.jar` 가 jar를 찾을 수 있다.
+if (org.gradle.internal.os.OperatingSystem.current().isWindows()) {
+    layout.buildDirectory.set(file('C:/temp/uua-build'))
+}
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
