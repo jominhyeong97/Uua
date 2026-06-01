@@ -44,7 +44,8 @@
 | ⑥ | recall@K + MCP 래퍼 + 문서 | ✅ | `mcp/`, `eval/`, `docs/adr/` |
 
 **테스트**: 56/56 통과 (단위 + 슬라이스 + Testcontainers 통합)
-**라이브 검증**: 4건 curl 스모크 + recall@20 = 4/4 = 100% (시드 데이터셋)
+**라이브 검증**: 4건 curl 스모크 통과
+**측정**: 실제 handoff 4문서(17 chunks) 인입 후 — **recall@2 = 10/10 = 100%**, **precision@1 = 9/10 = 90%** (p50 ~430ms, 2026-06-01 로컬). 자세한 결과는 [`eval/`](eval/). 시드(4/4) 측정의 "가짜 100%" 우려를 실제 데이터로 재검증한 결과.
 **비용**: $0 — Render 무료 웹서비스 + Neon 무료 Postgres + Gemini 무료티어
 
 ## 핵심 알고리즘
@@ -149,4 +150,4 @@ python runner.py
 
 ## 면접 한 줄
 
-> "AI 에이전트용 메모리 백엔드를 만들었습니다. 무엇을·언제 꺼낼지 결정해 토큰 예산에 맞춘 컨텍스트 팩을 조립하고 MCP로 제공합니다. Render+Neon+Gemini 무료티어로 비용 0을 [`/api/usage/summary`](https://uua.onrender.com/api/usage/summary) 엔드포인트로 숫자로 증명합니다. 백엔드는 Spring Boot, MCP는 공식 SDK가 가장 성숙한 Python으로 얇게 감쌌습니다."
+> "AI 에이전트용 메모리 백엔드를 만들었습니다. **무엇을·언제 꺼낼지**(의미검색 + 최신성 점수)를 결정해 토큰 예산 안의 컨텍스트 팩으로 조립하고 MCP로 제공합니다. 실제 핸드오프 문서로 측정한 **recall@2 = 10/10**, 비용은 Render + Neon + Gemini 무료티어로 **$0**을 [`/api/usage/summary`](https://uua.onrender.com/api/usage/summary)로 숫자로 증명합니다. 백엔드는 Spring Boot, MCP는 공식 SDK가 가장 성숙한 Python으로 얇게 감쌌습니다."

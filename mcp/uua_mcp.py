@@ -79,6 +79,7 @@ async def recall_context(
 def main() -> None:
     # --test-call: HTTP 경로만 검증 (MCP 프로토콜 없이) — Claude Code 등록 전 스모크용.
     if "--test-call" in sys.argv:
+        sys.stdout.reconfigure(encoding="utf-8")
         import asyncio
         query = "smoke test query"
         try:
