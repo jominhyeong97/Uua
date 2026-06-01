@@ -171,10 +171,17 @@ python uua_mcp.py --test-call "카프카 결정"
   - `eval/golden.json` — v1 시드 4 페어(memory:1 + memory:2 기반 쿼리들).
   - `eval/requirements.txt`(`httpx`), `eval/README.md`(셋업 + Assignment + 점수 해석 + 튜닝 포인트), `eval/.gitignore`(`.venv/`, `results-*.json`).
   - **별도 venv** (`eval/.venv`) — mcp/와 분리.
-  - **라이브 측정 결과**: recall@20 = **4/4 = 100.0%**. 카프카(0.80), ORBIT(0.77), 사가 패턴(0.83), render smoke(0.94). 첫 쿼리 40.7s(콜드스타트), 나머지 ~500-700ms.
+  - **라이브 측정 결과(시드 v1)**: recall@20 = **4/4 = 100.0%**. 카프카(0.80), ORBIT(0.77), 사가 패턴(0.83), render smoke(0.94). 첫 쿼리 40.7s(콜드스타트), 나머지 ~500-700ms.
   - **함정**: 100%는 시드 작아서 "가짜". 실제 handoff ingest 후 다시 측정해야 진짜 신호.
   - **환경 함정**: Claude Code 도구 환경의 PowerShell은 winget으로 설치한 Python을 PATH에서 못 찾음(Windows Store 스텁 우선) → 절대경로 `C:\Users\user\AppData\Local\Programs\Python\Python312\python.exe` 사용 필요.
-  - **형 숙제 (다음 세션)**: handoff 문서 3-5개 모아서 `POST /api/sessions/{id}/ingest`로 인입 → 새 memory_id 확보 → golden.json 확장 → recall 재측정.
+- ✅ **(2026-06-01) 단계 ⑥A v2 측정 — 실제 handoff 4건 인입 후 로컬 측정** (golden.json 갱신):
+  - **블로커**: Render 라이브가 300초 안 깨어남(콜드스타트 비정상) → 로컬 bootRun으로 fallback. compose의 pgvector + Flyway V1+V2 자동, 5.5초 부팅.
+  - **인입한 4 docs**: Uua HANDOFF.md(memory:1-9, 9청크), career/HANDOFF.md(memory:10-11), docs/DESIGN.md(memory:12-16), docs/adr/README.md(memory:17). 총 17 chunks, 7235 tokens.
+  - **함정 1 (PS 5.1 ConvertTo-Json)**: `Get-Content -Raw`가 반환하는 String은 ETS 속성(ReadCount, Drives, Home...)이 붙어 있어 `@{text=$text} | ConvertTo-Json`이 `{"text":{"value":"...","ReadCount":1,"Drives":["C","D"]...}}`로 직렬화 → 400. 해결: `[System.IO.File]::ReadAllText($path, [Text.Encoding]::UTF8)` 로 깨끗한 String 확보.
+  - **golden.json v2 (10 pairs)**: doc-level recall — query당 "올바른 doc의 chunk가 top-K에 들어왔나"로 PASS 판정. career(3), HANDOFF(3), DESIGN(2), ADR(1), 크로스(1).
+  - **결과**: **recall@2 = 10/10 = 100.0%**, **precision@1 = 9/10 = 90%**, p50 ~430ms / p95 942ms. max_tokens=1000이 천장이라 실효 K=2 — 그 안에서도 정답 doc을 잡았다는 강신호.
+  - **유일한 top-1 miss(#7)**: "ContextService finalScore recency 가중치" 쿼리가 DESIGN(memory:14) 대신 HANDOFF(memory:4)를 top-1로 골랐음. 원인은 HANDOFF의 단계③ 개발일지가 동일 수식을 그대로 인용 → **알고리즘 결함이 아닌 doc 간 내용 중복**. golden을 "expected: DESIGN OR HANDOFF" 풀이면 10/10이 됨.
+  - **남은 액션**: results 파일(`results-20260601T151141.json`)은 gitignore. golden.json만 커밋 후보. Render 콜드스타트 문제 별도 진단 필요.
 
 ---
 

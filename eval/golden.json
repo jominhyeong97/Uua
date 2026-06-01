@@ -1,31 +1,73 @@
 {
-  "_comment": "손으로 만든 정답지. 'query를 던지면 expected_sources 중 적어도 하나가 items에 들어와야 PASS.' v1 시드는 라이브 데이터(memory:1, memory:2)로 만든 4건. 실제 handoff ingest 후엔 사용자가 직접 추가/수정.",
+  "_comment": "실제 handoff 4건 인입 후 작성한 v2 정답지. 각 쿼리가 '올바른 doc의 청크를 top-K에 끌어왔는가'로 doc-level recall을 측정. memory_id는 fresh DB 한 번 인입 후 동결된 값(2026-06-01 로컬 측정). 시드 4건(memory:1,memory:2)은 ID 충돌로 폐기.",
+  "_doc_map": {
+    "Uua HANDOFF.md": "memory:1-9 (sessionId=uua-handoff-202606)",
+    "career HANDOFF.md": "memory:10-11 (sessionId=career-handoff-202605)",
+    "Uua DESIGN.md": "memory:12-16 (sessionId=uua-design)",
+    "ADR README": "memory:17 (sessionId=uua-adr-index)"
+  },
   "default_top_k": 20,
   "default_max_tokens": 1000,
   "pairs": [
     {
-      "query": "카프카 결정",
+      "query": "리드넘버 백엔드 자소서 ORBIT 사가 트랜잭션",
       "project_key": "uua-render",
-      "expected_sources": ["memory:2"],
-      "description": "단계④ ingest 결과: 카프카 보상 트랜잭션 메모"
+      "expected_sources": ["memory:10", "memory:11"],
+      "description": "career-only: 리드넘버 자소서 핵심 스토리(Kafka 보상 트랜잭션) 라인"
     },
     {
-      "query": "ORBIT 워크스페이스 영향도",
+      "query": "메가스터디 교육기획 행정 자소서 에듀테크",
       "project_key": "uua-render",
-      "expected_sources": ["memory:2"],
-      "description": "같은 메모의 다른 키워드 — 의미검색 검증"
+      "expected_sources": ["memory:10", "memory:11"],
+      "description": "career-only: 메가스터디 행정·기획·에듀테크 자소서"
     },
     {
-      "query": "사가 패턴 트랜잭션",
+      "query": "이력서 학점 정정 3.57 잡코리아",
       "project_key": "uua-render",
-      "expected_sources": ["memory:2"],
-      "description": "용어 기반 검색 — 단순 키워드 매치가 아닌 임베딩 효과 검증"
+      "expected_sources": ["memory:10", "memory:11"],
+      "description": "career-only: 확정된 사실 — 학점 3.75→3.57"
     },
     {
-      "query": "render smoke",
+      "query": "단계 ⑤ Usage 가드 데코레이터 라이브 스모크",
       "project_key": "uua-render",
-      "expected_sources": ["memory:1"],
-      "description": "단계② 쓰기 스모크 메모 — 짧은 쿼리 매칭"
+      "expected_sources": ["memory:1", "memory:2", "memory:3", "memory:4", "memory:5", "memory:6", "memory:7", "memory:8", "memory:9"],
+      "description": "Uua HANDOFF: 단계⑤ 비용방어 + 라이브 검증 진행 상태"
+    },
+    {
+      "query": "MCP recall_context Claude Code Connected dogfood",
+      "project_key": "uua-render",
+      "expected_sources": ["memory:1", "memory:2", "memory:3", "memory:4", "memory:5", "memory:6", "memory:7", "memory:8", "memory:9"],
+      "description": "Uua HANDOFF: 단계⑥B MCP 래퍼 등록 + dogfood"
+    },
+    {
+      "query": "Render Docker 빌드 실패 layout.buildDirectory Windows",
+      "project_key": "uua-render",
+      "expected_sources": ["memory:1", "memory:2", "memory:3", "memory:4", "memory:5", "memory:6", "memory:7", "memory:8", "memory:9"],
+      "description": "Uua HANDOFF: 단계②~⑤ 라이브 마무리에서 발견한 Docker 빌드 우회"
+    },
+    {
+      "query": "ContextService finalScore cosineSim recency 가중치 0.1",
+      "project_key": "uua-render",
+      "expected_sources": ["memory:12", "memory:13", "memory:14", "memory:15", "memory:16"],
+      "description": "DESIGN.md: 점수 알고리즘 의사코드"
+    },
+    {
+      "query": "토큰 예산 그리디 컨텍스트 팩 조립 알고리즘",
+      "project_key": "uua-render",
+      "expected_sources": ["memory:12", "memory:13", "memory:14", "memory:15", "memory:16"],
+      "description": "DESIGN.md: v1 구체 스펙 — 토큰버짓 그리디"
+    },
+    {
+      "query": "Approach A 좁고 깊게 B 확장 인터페이스",
+      "project_key": "uua-render",
+      "expected_sources": ["memory:12", "memory:13", "memory:14", "memory:15", "memory:16", "memory:17"],
+      "description": "DESIGN.md 또는 ADR 인덱스: Approach A 결정"
+    },
+    {
+      "query": "Michael Nygard ADR 포맷 Context Decision Consequences",
+      "project_key": "uua-render",
+      "expected_sources": ["memory:17"],
+      "description": "ADR README only: 단 1개 chunk(memory:17)만 정답"
     }
   ]
 }
