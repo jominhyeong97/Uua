@@ -2,14 +2,27 @@
 
 > 이 프로젝트에서 Claude(Claude Code)를 켰을 때 **가장 먼저 읽는 파일**입니다. (작업은 IntelliJ가 아니라 Claude Code에서 진행 중)
 > 전체 설계는 `docs/DESIGN.md` (Status: APPROVED). 이 핸드오프는 "지금 어디까지 됐고 다음에 뭘 하나"를 담습니다.
-> 최종 갱신: 2026-05-31 (v1 단계 ①~⑥ 모두 완료. README + ADR 6개까지 포함)
+> 최종 갱신: 2026-06-01 (v1 마감 — recall@K v2 측정 10/10, Render 클라우드 인입 완료, MCP dogfood 본 시작 준비)
 
 ---
 
 ## ⏭️ 여기서 시작 (다음 세션)
 
-**단계 ②~⑤ 라이브 검증 완료.** 4건 curl 스모크(쓰기/인입/읽기/usage summary) 모두 통과. Render 라이브 + Gemini 키 등록 + usage_log 정상 누적 확인.
-**단계 ⑥B (MCP 래퍼) 코드 작성됨.** `mcp/uua_mcp.py` (Python FastMCP + httpx, recall_context 도구 1개). 검증은 Python 설치 후 다음 세션.
+**🎉 v1 MVP 마감.** 코드 + 측정 + 클라우드 인입 + 회고 모두 완료. 이제 본격 dogfood 단계.
+
+**다음 세션에서 할 일**:
+1. **dogfood 본 시작** — 새 Claude Code 세션에서 자연어로 "uua에서 어제 작업한 내용 가져와줘" → MCP가 자동으로 `recall_context` 호출되어 클라우드(uua-render)에서 응답하는지 체감 확인. Render 첫 호출은 ~2분 콜드스타트 가능 → 미리 `/actuator/health` 한 번 깨워두기.
+2. **매주 1-2건 새 handoff 인입** → `eval/golden.json` 확장 → recall 재측정 (성능 회귀 모니터링). DB 시퀀스 유지를 위해 같은 Render DB에 누적 인입.
+3. **선택**: precision@1 100% 위해 #7 같은 cross-doc 쿼리는 expected_sources에 양쪽 doc 포함하도록 golden 수정.
+
+**참고**: v1 마감까지의 이력은 아래 "지금 상태(DONE)" 섹션 전체. 가장 최근(2026-06-01) 변경은 단계⑥ 마감 항목들.
+
+---
+
+## 📦 v1 archive — 이하 작업 이력 (참고용)
+
+<details>
+<summary>v1 진행 중 기록한 "여기서 시작" 가이드 (펼치기)</summary>
 
 다음 세션 시작 시 **3가지를 순서대로**:
 
@@ -78,6 +91,8 @@ python uua_mcp.py --test-call "카프카 결정"
 - 얇은 stdio MCP 래퍼: `recall_context` 도구가 `/api/context` 호출
 - 본인 Claude Code/Gemini에 MCP 등록해 dogfooding 시작
 - README + ADR: 임베딩/벡터검색/토큰버짓/MCP 결정 기록
+
+</details>
 
 ---
 
@@ -181,7 +196,15 @@ python uua_mcp.py --test-call "카프카 결정"
   - **golden.json v2 (10 pairs)**: doc-level recall — query당 "올바른 doc의 chunk가 top-K에 들어왔나"로 PASS 판정. career(3), HANDOFF(3), DESIGN(2), ADR(1), 크로스(1).
   - **결과**: **recall@2 = 10/10 = 100.0%**, **precision@1 = 9/10 = 90%**, p50 ~430ms / p95 942ms. max_tokens=1000이 천장이라 실효 K=2 — 그 안에서도 정답 doc을 잡았다는 강신호.
   - **유일한 top-1 miss(#7)**: "ContextService finalScore recency 가중치" 쿼리가 DESIGN(memory:14) 대신 HANDOFF(memory:4)를 top-1로 골랐음. 원인은 HANDOFF의 단계③ 개발일지가 동일 수식을 그대로 인용 → **알고리즘 결함이 아닌 doc 간 내용 중복**. golden을 "expected: DESIGN OR HANDOFF" 풀이면 10/10이 됨.
-  - **남은 액션**: results 파일(`results-20260601T151141.json`)은 gitignore. golden.json만 커밋 후보. Render 콜드스타트 문제 별도 진단 필요.
+  - **남은 액션**: results 파일(`results-20260601T151141.json`)은 gitignore. golden.json만 커밋 후보.
+- ✅ **(2026-06-01) 단계⑥ 마감 — Render 진단 + 클라우드 dogfood 인입 + Notion 회고**:
+  - **Render 진단**: 5분 안 안 깨던 게 10분 백그라운드 시도에서 116.6s 만에 200. 즉 deep cold start(~2분)가 간헐적. 영구장애 아님. 첫 호출 timeout은 180s 권장.
+  - **Render 클라우드 인입(같은 4 docs)**: Uua HANDOFF=memory:4-12, career=memory:13-14, DESIGN=memory:15-19, ADR=memory:20. 17 chunks, 7540 tokens. usage today=17/1000, failures=0.
+  - **MCP wrapper 로컬 dogfood 검증**: `python uua_mcp.py --test-call "리드넘버 자소서 핵심 스토리"`(UUA_BASE_URL=localhost) → top-1=memory:10(career), top-2=memory:11(career), top-3=memory:16(DESIGN — handoff 개념 언급). 컨텍스트 팩 881/1000 토큰. **`--test-call` print가 Windows cp949에서 em dash(—) UnicodeEncodeError → `sys.stdout.reconfigure(encoding='utf-8')` 한 줄 추가**(MCP JSON-RPC over stdio는 utf-8 별도 처리되어 영향 없음).
+  - **README v2 측정 반영**: 시드 4/4 → 실데이터 recall@2=10/10·precision@1=90%. 면접 한 줄에 실측 박음.
+  - **Notion 회고 페이지**: https://www.notion.so/372ff921786f81cfa4d7ca70120a2507 ("📊 단계⑥ 마감 — recall@K v2 측정 + v1 회고").
+  - 커밋: `d812da5` (eval v2 + HANDOFF), `3be80c0` (README + uua_mcp.py).
+  - **🎉 v1 MVP 마감 — 클라우드 dogfood 본 시작 준비 끝.** Claude Code의 MCP(`uua-render` projectKey)가 자연어 호출 시 클라우드 데이터에서 응답.
 
 ---
 
